@@ -5,19 +5,25 @@ from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import InjectedToolArg
 from langgraph.store.base import BaseStore
-from chat_server import Configuration
+from langmem import create_manage_memory_tool, create_search_memory_tool
+from chat_server.configuration import Configuration
+from chat_server.prompts import STORE_MEMORY_INSTRUCTIONS
+from chat_server.state import Memory
 from dotenv import load_dotenv
-
 load_dotenv()
+
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
+web_search_tool = TavilySearchResults(max_results=3, include_images=False)
+
+
 
 async def upsert_memory(
         content:str, 
         context:str, 
         *, 
-        memoty_id:Optional[uuid.UUID]=None,
+        memory_id:Optional[uuid.UUID]=None,
         config: Annotated[RunnableConfig, InjectedToolArg] ,
-        store: BaseStore
+        store: Annotated[BaseStore, InjectedToolArg]
         ):
     """Upsert a memory in the database.
 
@@ -40,14 +46,35 @@ async def upsert_memory(
     await store.aput(
         namespace,
         key = memory_id,
-        value = {
-            "content": content,
-            "context": context,
-        }
+        value = Memory(content, context, memory_id)
     )
     return f"Stored memory_id {memory_id}"
 
 
 
 
-search_tool = TavilySearchResults(max_results=3, include_images=False)
+
+# Factory functions for memory tools
+def get_manage_memory_tool(namespace:tuple):
+    """Returns a configured memory management tool.
+    
+    This tool allows the agent to create, update, and delete memories.
+    The tool will be used with the same content/context structure as the
+    existing upsert_memory function.
+    """
+    # Default namespace pattern that will be filled at runtime
+    return create_manage_memory_tool(
+        namespace=namespace,
+        instructions=STORE_MEMORY_INSTRUCTIONS,
+        schema=Memory
+    )
+
+def get_search_memory_tool(namespace:tuple):
+    """Returns a configured memory search tool.
+    
+    This tool allows the agent to search for relevant memories.
+    """
+    # Default namespace pattern that will be filled at runtime
+    return create_search_memory_tool(
+        namespace=namespace,
+    )

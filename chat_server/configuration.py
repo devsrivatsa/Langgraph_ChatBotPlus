@@ -29,9 +29,8 @@ class Configuration:
     @classmethod
     def from_runnable_config(cls, config:Optional[RunnableConfig]=None) -> "Configuration":
         """Create a configuration from a runnable config"""
-        configurable = {
-            config["configurable"] if config and config["configurable"] else {}
-        }
+        configurable = config["configurable"] if config and config["configurable"] else {}
+        
         values: dict[str, Any] = {
             field.name: os.environ.get(field.name.upper(), configurable.get(field.name))
             for field in fields(cls)
